@@ -73,6 +73,7 @@ def parse_args():
     parser.add_argument('--topk',        type=int, default=32)
     parser.add_argument('--nprobe',      type=int, default=32)
     parser.add_argument('--npartitions', type=int, default=8192)
+    parser.add_argument('--flat',        action="store_true")
     
     parser.add_argument('--benchmark', action="store_true")
     
@@ -94,6 +95,11 @@ if __name__ == "__main__":
     X_test  = np.load('%s_test.npy' % args.cache_path)
     print('loading cache: done', file=sys.stderr)
     
+    # >>
+    X_train    = X_train[2000:]
+    X_test     = X_test[2000:]
+    # <<
+    
     n_toks = max([max(x) for x in X_train]) + 1
     
     # --
@@ -107,8 +113,13 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             pin_memory=True,
             shuffle=False,
+            num_workers=4,
         ))
     }
+    
+    # >>
+    print([b[0].shape for b in dataloaders['valid']])
+    # <<
     
     # --
     # Define model
@@ -126,7 +137,7 @@ if __name__ == "__main__":
     model.verbose = not args.no_verbose
     print(model, file=sys.stderr)
     
-    model.init_ann(args.topk, args.batch_size, args.nprobe, args.npartitions)
+    model.init_ann(args.topk, args.batch_size, args.nprobe, args.npartitions, flat=args.flat)
     
     pct_agree = warmup(model, dataloaders['valid'][0][0])
     print('warmup: pct_agree=%f' % pct_agree, file=sys.stderr)
@@ -156,24 +167,28 @@ if __name__ == "__main__":
         model.exact = True
         
         preds, _         = model.predict(dataloaders, mode='valid', no_cat=True)
-        top_k            = fast_topk(preds, X_train)
-        exact_precisions = precision_at_ks(X_test, top_k)
+        # top_k            = fast_topk(preds, X_train)
+        # exact_precisions = precision_at_ks(X_test, top_k)
+        top_k            = fast_topk(preds)
+        exact_precisions = precision_at_ks(X_train, top_k)
         
-        # # Approx accuracy
-        # model.exact = False
-        # model.approx_linear.dense = True
+        # Approx accuracy
+        model.exact = False
+        model.approx_linear.dense = True
         
-        # preds, _          = model.predict(dataloaders, mode='valid', no_cat=True)
-        # top_k             = fast_topk(preds, X_train)
-        # approx_precisions = precision_at_ks(X_test, top_k)
+        preds, _          = model.predict(dataloaders, mode='valid', no_cat=True)
+        # top_k            = fast_topk(preds, X_train)
+        # exact_precisions = precision_at_ks(X_test, top_k)
+        top_k             = fast_topk(preds)
+        approx_precisions = precision_at_ks(X_train, top_k)
         
         print(json.dumps({
             "exact_p_at_01"  : exact_precisions[1],
             "exact_p_at_05"  : exact_precisions[5],
             "exact_p_at_10"  : exact_precisions[10],
-            # "approx_p_at_01" : approx_precisions[1],
-            # "approx_p_at_05" : approx_precisions[5],
-            # "approx_p_at_10" : approx_precisions[10],
+            "approx_p_at_01" : approx_precisions[1],
+            "approx_p_at_05" : approx_precisions[5],
+            "approx_p_at_10" : approx_precisions[10],
         }))
         
 

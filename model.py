@@ -95,7 +95,7 @@ class ExactEncoder(BaseNet):
 # Inference time models
 
 class ApproxLinear(nn.Module):
-    def __init__(self, linear, batch_size, topk, nprobe, npartitions, flat=False):
+    def __init__(self, linear, batch_size, topk, nprobe, npartitions, flat):
         super().__init__()
         
         linear_weight = linear.weight.detach().cpu().numpy()
@@ -145,7 +145,7 @@ class ApproxLinear(nn.Module):
         return dense
     
     def forward(self, x):
-        # torch.cuda.synchronize() # !! faiss and pytorch on different streams
+        torch.cuda.synchronize() # !! faiss and pytorch on different streams
         
         # !! bs == I.shape[0] most of the time -- do the `:bs` calls slow us down?
         bs = x.shape[0]
@@ -161,8 +161,8 @@ class ApproxLinear(nn.Module):
             self.Iptr,
         )
         
-        # torch.cuda.synchronize()
-        # self.res.syncDefaultStreamCurrentDevice()
+        torch.cuda.synchronize()
+        self.res.syncDefaultStreamCurrentDevice()
         
         if self.dense:
             return self._compute_dense(self.I[:bs], self.D[:bs])
@@ -213,8 +213,9 @@ class InferenceEncoder(BaseNet):
         self.approx_linear = None
         self.exact         = True
     
-    def init_ann(self, topk, batch_size, nprobe, npartitions):
-        self.approx_linear = ApproxLinear(self.linear, batch_size, topk, nprobe, npartitions)
+    def init_ann(self, topk, batch_size, nprobe, npartitions, flat=False):
+        self.approx_linear = ApproxLinear(
+            self.linear, batch_size, topk, nprobe, npartitions, flat=flat)
     
     def forward(self, x):
         x = self.emb(x)
