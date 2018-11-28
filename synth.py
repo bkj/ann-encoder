@@ -45,7 +45,7 @@ def benchmark_predict(model, dataloaders, mode='val'):
     
     return time() - t
 
-def warmup(model, batch):
+def warmup(model, batch, topk):
     batch = batch.cuda()
     
     model.exact = False
@@ -53,8 +53,8 @@ def warmup(model, batch):
     approx_test = to_numpy(approx_test)
     
     model.exact = True
-    exact_test  = model(dataloaders['valid'][0][0].cuda())
-    exact_test  = exact_test.topk(k=args.topk, dim=-1)[1]
+    exact_test  = model(batch)
+    exact_test  = exact_test.topk(k=topk, dim=-1)[1]
     exact_test  = to_numpy(exact_test)
     
     return (approx_test[:,0] == exact_test[:,0]).mean()
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     
     model.init_ann(args.topk, args.batch_size, args.nprobe, args.npartitions)
     
-    pct_agree = warmup(model, dataloaders['valid'][0][0])
+    pct_agree = warmup(model=model, batch=dataloaders['valid'][0][0], topk=args.topk)
     print('warmup: pct_agree=%f' % pct_agree, file=sys.stderr)
     
     # --

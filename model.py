@@ -55,17 +55,15 @@ class BiasedEmbeddingSum(nn.Module):
         self.emb.weight.data[0] = 0
         
     def forward(self, x):
-        out = self.emb(x).sum(dim=1)
-        out = out + self.emb_bias
-        return out
+        return self.emb(x).sum(dim=1) + self.emb_bias
 
 
 class BiasedLinear(nn.Linear):
     def __init__(self, in_channels, out_channels, bias_offset=0.0):
-        super().__init__(in_channels, out_channels, bias=True) # !! bias not handled by approx yet
+        super().__init__(in_channels, out_channels, bias=True)
         torch.nn.init.normal_(self.weight.data, 0, 0.01)
-        self.bias.data.zero_()        # !!
-        self.bias.data += bias_offset # !!
+        self.bias.data.zero_()
+        self.bias.data += bias_offset
 
 
 class ExactEncoder(BaseNet):
@@ -156,13 +154,9 @@ class InfBiasedEmbeddingSum(nn.Module):
         
         self.emb = nn.EmbeddingBag(n_toks, emb_dim, mode='sum')
         self.emb_bias = nn.Parameter(torch.zeros(emb_dim))
-        
-        self.emb_dim = emb_dim
     
     def forward(self, x):
-        out = self.emb(x) 
-        out = out + self.emb_bias
-        return out
+        return self.emb(x) + self.emb_bias
 
 
 class InfBiasedLinear(nn.Linear):
@@ -192,7 +186,7 @@ class InferenceEncoder(BaseNet):
         
         self.linear = InfBiasedLinear(emb_dim, out_dim)
         
-        self.approx_linear = None # Init later
+        self.approx_linear = None
         self.exact         = True
     
     def init_ann(self, topk, batch_size, nprobe, npartitions):

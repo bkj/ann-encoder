@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader
 
 from basenet.helpers import to_numpy, set_seeds
 
-from model import InferenceEncoder
+from model import ExactEncoder, InferenceEncoder
 from model import RaggedAutoencoderDataset, ragged_collate_fn
 from helpers import fast_topk, precision_at_ks
 
@@ -53,7 +53,7 @@ def warmup(model, batch):
     approx_test = to_numpy(approx_test)
     
     model.exact = True
-    exact_test  = model(dataloaders['valid'][0][0].cuda())
+    exact_test  = model(batch)
     exact_test  = exact_test.topk(k=args.topk, dim=-1)[1]
     exact_test  = to_numpy(exact_test)
     
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     
     print('define dataloaders', file=sys.stderr)
     dataloaders = {
-        "valid" : list(DataLoader( # Precompute w/ `list` call
+        "valid" : list(DataLoader(
             dataset=RaggedAutoencoderDataset(X=X_train, n_toks=n_toks),
             batch_size=args.batch_size,
             collate_fn=ragged_collate_fn,
@@ -115,37 +115,42 @@ if __name__ == "__main__":
     # Define model
     
     print('define model', file=sys.stderr)
-    model = InferenceEncoder(n_toks=n_toks, emb_dim=args.emb_dim)
+    model = InferenceEncoder(
+        n_toks=n_toks,
+        emb_dim=args.emb_dim,
+    )
+    
     model.load('%s.pt' % args.cache_path)
+    _ = model.eval()
+    
     model = model.to(torch.device('cuda'))
-    model.eval()
     model.verbose = not args.no_verbose
     print(model, file=sys.stderr)
     
-    if args.benchmark:
-        print('set_bag + init_ann', file=sys.stderr)
-        model.init_ann(args.topk, args.batch_size, args.nprobe, args.npartitions)
+    model.init_ann(args.topk, args.batch_size, args.nprobe, args.npartitions)
+    
+    pct_agree = warmup(model, dataloaders['valid'][0][0])
+    print('warmup: pct_agree=%f' % pct_agree, file=sys.stderr)
     
     # --
     # Run
     
-    torch.cuda.synchronize()
-    print('run', file=sys.stderr)
     if args.benchmark:
-        
-        # Exact
-        model.exact = True
-        exact_time  = benchmark_predict(model, dataloaders, mode='valid')
         
         # Approximate
         model.exact = False
         approx_time = benchmark_predict(model, dataloaders, mode='valid')
         
+        # Exact
+        model.exact = True
+        exact_time  = benchmark_predict(model, dataloaders, mode='valid')
+        
         print(json.dumps({
             "exact_time"     : exact_time,
             "approx_time"    : approx_time,
-            "approx_speedup" : exact_time / approx_time
+            "approx_speedup" : exact_time / approx_time,
         }))
+        
     else:
         t = time()
         
