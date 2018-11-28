@@ -66,7 +66,7 @@ def warmup(model, batch):
 def parse_args():
     parser = argparse.ArgumentParser()
     
-    parser.add_argument('--cache-path', type=str)
+    parser.add_argument('--cache-path', type=str, default='cache/ml20')
     parser.add_argument('--batch-size', type=int, default=2048)
     parser.add_argument('--emb-dim', type=int, default=800)
     
@@ -118,7 +118,7 @@ if __name__ == "__main__":
     }
     
     # >>
-    print([b[0].shape for b in dataloaders['valid']])
+    # print([b[0].shape for b in dataloaders['valid']])
     # <<
     
     # --
@@ -167,20 +167,26 @@ if __name__ == "__main__":
         model.exact = True
         
         preds, _         = model.predict(dataloaders, mode='valid', no_cat=True)
+        # >>
         # top_k            = fast_topk(preds, X_train)
         # exact_precisions = precision_at_ks(X_test, top_k)
+        # --
         top_k            = fast_topk(preds)
         exact_precisions = precision_at_ks(X_train, top_k)
+        # <<
         
         # Approx accuracy
         model.exact = False
         model.approx_linear.dense = True
         
         preds, _          = model.predict(dataloaders, mode='valid', no_cat=True)
+        # >>
         # top_k            = fast_topk(preds, X_train)
         # exact_precisions = precision_at_ks(X_test, top_k)
+        # --
         top_k             = fast_topk(preds)
         approx_precisions = precision_at_ks(X_train, top_k)
+        # <<
         
         print(json.dumps({
             "exact_p_at_01"  : exact_precisions[1],

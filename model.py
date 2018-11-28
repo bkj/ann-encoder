@@ -132,19 +132,21 @@ class ApproxLinear(nn.Module):
         self.Iptr = faiss.cast_integer_to_long_ptr(self.I.storage().data_ptr())
         
         self.dense   = False
-        self.out_dim = self.weights.shape[0]
+        self.out_dim = linear_weight.shape[0]
     
     def _compute_dense(self, I, D):
         col = I.cpu().view(-1)
         row = torch.arange(I.shape[0]).view(-1, 1).repeat(1, I.shape[1]).view(-1).long()
         val = D.cpu().view(-1)
         
-        dense = torch.zeros(I.shape[0], self.out_dim)
+        dense = torch.zeros(I.shape[0], self.out_dim) + D.min().cpu() - 1
         dense[(row, col)] = val
         
         return dense
     
     def forward(self, x):
+        self.D.zero_()
+        self.I.zero_()
         torch.cuda.synchronize() # !! faiss and pytorch on different streams
         
         # !! bs == I.shape[0] most of the time -- do the `:bs` calls slow us down?
