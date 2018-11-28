@@ -28,10 +28,16 @@ CUDA_VISIBLE_DEVICES=0 python inference.py --cache-path cache/netflix --emb-dim 
 # {"exact_time": 1.2870566844940186, "approx_time": 0.7744965553283691, "approx_speedup": 1.6617978164516631}
 
 # Synthetic analog
-CUDA_VISIBLE_DEVICES=0 python synth.py --batch-size 1024 --emb-dim 256 --out-dim 480190 --n-toks 480190
+CUDA_VISIBLE_DEVICES=0 python synth.py --batch-size 1024 --emb-dim 256 \
+    --out-dim 480190 --n-toks 480190
+# {'exact_time': 3.5207951068878174, 'approx_time': 0.6484885215759277, 'approx_speedup': 5.429232730799519}
 
-CUDA_VISIBLE_DEVICES=0 python synth.py --batch-size 1024 --emb-dim 256 --out-dim 480190
-# {'exact_time': 3.520021915435791, 'approx_time': 0.6656723022460938, 'approx_speedup': 5.287920052492235}
+CUDA_VISIBLE_DEVICES=0 python synth.py --batch-size 1024 --emb-dim 256 \
+    --out-dim 480190 --n-toks 480190 --seq-len 1000
+# {'exact_time': 3.875016212463379, 'approx_time': 0.9764342308044434, 'approx_speedup': 3.9685378597091123}
+
+
+
 
 
 
