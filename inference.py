@@ -66,16 +66,17 @@ def warmup(model, batch):
 def parse_args():
     parser = argparse.ArgumentParser()
     
-    parser.add_argument('--cache-path', type=str, default='cache/ml20')
-    parser.add_argument('--batch-size', type=int, default=2048)
+    parser.add_argument('--cache-path', type=str)
+    parser.add_argument('--batch-size', type=int, default=2048) 
     parser.add_argument('--emb-dim', type=int, default=800)
+    parser.add_argument('--seq-len', type=int, default=None)    # truncate input
     
     parser.add_argument('--topk',        type=int, default=32)
     parser.add_argument('--nprobe',      type=int, default=32)
     parser.add_argument('--npartitions', type=int, default=8192)
-    parser.add_argument('--flat',        action="store_true")
+    parser.add_argument('--flat',        action="store_true")   # use exact L2 index for testing
     
-    parser.add_argument('--benchmark', action="store_true")
+    parser.add_argument('--benchmark', action="store_true")     # don't compute accuracy
     
     parser.add_argument('--no-verbose', action="store_true")
     parser.add_argument('--seed', type=int, default=456)
@@ -95,11 +96,6 @@ if __name__ == "__main__":
     X_test  = np.load('%s_test.npy' % args.cache_path)
     print('loading cache: done', file=sys.stderr)
     
-    # >>
-    X_train    = X_train[2000:]
-    X_test     = X_test[2000:]
-    # <<
-    
     n_toks = max([max(x) for x in X_train]) + 1
     
     # --
@@ -108,7 +104,7 @@ if __name__ == "__main__":
     print('define dataloaders', file=sys.stderr)
     dataloaders = {
         "valid" : list(DataLoader(
-            dataset=RaggedAutoencoderDataset(X=X_train, n_toks=n_toks),
+            dataset=RaggedAutoencoderDataset(X=X_train, n_toks=n_toks, maxlen=args.seq_len),
             collate_fn=ragged_collate_fn,
             batch_size=args.batch_size,
             pin_memory=True,
@@ -116,10 +112,6 @@ if __name__ == "__main__":
             num_workers=4,
         ))
     }
-    
-    # >>
-    # print([b[0].shape for b in dataloaders['valid']])
-    # <<
     
     # --
     # Define model

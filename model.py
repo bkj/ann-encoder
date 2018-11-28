@@ -19,8 +19,12 @@ from basenet import BaseNet
 # Data utilities
 
 class RaggedAutoencoderDataset(Dataset):
-    def __init__(self, X, n_toks):
-        self.X = [torch.LongTensor(xx) for xx in X]
+    def __init__(self, X, n_toks, maxlen=None):
+        if maxlen is None:
+            self.X = [torch.LongTensor(xx) for xx in X]
+        else:
+            self.X = [torch.LongTensor(xx)[:maxlen] for xx in X]
+        
         self.n_toks = n_toks
     
     def __getitem__(self, idx):
