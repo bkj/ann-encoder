@@ -97,9 +97,9 @@ if __name__ == "__main__":
     dataloaders = {
         "valid" : list(torch.utils.data.DataLoader(
             dataset=torch.utils.data.TensorDataset(X, y),
-            shuffle=False,
             batch_size=args.batch_size,
-            pin_memory=True
+            pin_memory=True,
+            shuffle=False,
         ))
     }
     
@@ -115,6 +115,7 @@ if __name__ == "__main__":
     
     model = model.to(torch.device('cuda'))
     model.verbose = args.verbose
+    _ = model.eval()
     print(model, file=sys.stderr)
     
     model.init_ann(args.topk, args.batch_size, args.nprobe, args.npartitions)

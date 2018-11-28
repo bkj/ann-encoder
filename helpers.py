@@ -22,6 +22,7 @@ def precision_at_ks(act, pred, ks=[1, 5, 10]):
     
     for k in ks:
         ps = [overlap(act[i], pred[i][:k]) for i in range(len(act))]
+        print(np.sum(ps))
         out[k] = np.mean(ps) / k
     
     return out
@@ -43,6 +44,8 @@ def fast_topk(preds, X_train, n_jobs=32):
     ) for pred, offset in zip(preds, offsets)]
     top_k = Parallel(n_jobs=n_jobs, backend='threading')(jobs)
     top_k = np.vstack(top_k)
+    
+    print(top_k.shape)
     
     return top_k
 

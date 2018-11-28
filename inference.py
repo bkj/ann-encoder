@@ -103,10 +103,9 @@ if __name__ == "__main__":
     dataloaders = {
         "valid" : list(DataLoader(
             dataset=RaggedAutoencoderDataset(X=X_train, n_toks=n_toks),
-            batch_size=args.batch_size,
             collate_fn=ragged_collate_fn,
-            num_workers=4,
-            pin_memory=False,
+            batch_size=args.batch_size,
+            pin_memory=True,
             shuffle=False,
         ))
     }
@@ -152,23 +151,29 @@ if __name__ == "__main__":
         }))
         
     else:
-        t = time()
         
         # Exact accuracy
         model.exact = True
         
-        # Predict
-        preds, _ = model.predict(dataloaders, mode='valid', no_cat=True)
+        preds, _         = model.predict(dataloaders, mode='valid', no_cat=True)
+        top_k            = fast_topk(preds, X_train)
+        exact_precisions = precision_at_ks(X_test, top_k)
         
-        # Rank
-        top_k = fast_topk(preds, X_train)
+        # # Approx accuracy
+        # model.exact = False
+        # model.approx_linear.dense = True
         
-        # Compute precision
-        precisions = precision_at_ks(X_test, top_k)
+        # preds, _          = model.predict(dataloaders, mode='valid', no_cat=True)
+        # top_k             = fast_topk(preds, X_train)
+        # approx_precisions = precision_at_ks(X_test, top_k)
         
         print(json.dumps({
-            "p_at_01": precisions[1],
-            "p_at_05": precisions[5],
-            "p_at_10": precisions[10],
-            "elapsed": time() - t,
+            "exact_p_at_01"  : exact_precisions[1],
+            "exact_p_at_05"  : exact_precisions[5],
+            "exact_p_at_10"  : exact_precisions[10],
+            # "approx_p_at_01" : approx_precisions[1],
+            # "approx_p_at_05" : approx_precisions[5],
+            # "approx_p_at_10" : approx_precisions[10],
         }))
+        
+

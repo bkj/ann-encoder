@@ -95,23 +95,25 @@ class ExactEncoder(BaseNet):
 # Inference time models
 
 class ApproxLinear(nn.Module):
-    def __init__(self, linear, batch_size, topk, nprobe, npartitions):
+    def __init__(self, linear, batch_size, topk, nprobe, npartitions, flat=False):
         super().__init__()
         
         linear_weight = linear.weight.detach().cpu().numpy()
         
         self.has_bias = linear.bias is not None
-        print('ApproxLinear: has_bias=%d' % self.has_bias, file=sys.stderr)
         if self.has_bias:
             linear_bias = linear.bias.detach().cpu().numpy()
             self.weights = np.column_stack([linear_weight, linear_bias])
         else:
             self.weights = linear_weight
         
+        if flat:
+            print("!! ApproxLinear: FLAT testing mode", file=sys.stderr)
+            
         self.cpu_index = faiss.index_factory(
             self.weights.shape[1],
-            f"IVF{npartitions},Flat",
-            faiss.METRIC_INNER_PRODUCT # This appears to be slower -- why? And can we get away w/ L2 at inference time?
+            "Flat" if flat else f"IVF{npartitions},Flat",
+            faiss.METRIC_INNER_PRODUCT
         )
         self.cpu_index.train(self.weights)
         self.cpu_index.add(self.weights)
@@ -129,23 +131,43 @@ class ApproxLinear(nn.Module):
         self.Dptr = faiss.cast_integer_to_float_ptr(self.D.storage().data_ptr())
         self.Iptr = faiss.cast_integer_to_long_ptr(self.I.storage().data_ptr())
         
+        self.dense   = False
+        self.out_dim = self.weights.shape[0]
+    
+    def _compute_dense(self, I, D):
+        col = I.cpu().view(-1)
+        row = torch.arange(I.shape[0]).view(-1, 1).repeat(1, I.shape[1]).view(-1).long()
+        val = D.cpu().view(-1)
+        
+        dense = torch.zeros(I.shape[0], self.out_dim)
+        dense[(row, col)] = val
+        
+        return dense
+    
     def forward(self, x):
+        # torch.cuda.synchronize() # !! faiss and pytorch on different streams
+        
+        # !! bs == I.shape[0] most of the time -- do the `:bs` calls slow us down?
         bs = x.shape[0]
         if self.has_bias:
-            if bs == self.batch_size:
-                x = torch.cat([x, self.ones], dim=-1)
-            else:
-                x = torch.cat([x, self.ones[:bs]], dim=-1)
+            x = torch.cat([x, self.ones[:bs]], dim=-1)
         
         xptr = faiss.cast_integer_to_float_ptr(x.storage().data_ptr())
         self.index.search_c(
-            x.shape[0],
+            bs,
             xptr,
             self.topk,
             self.Dptr,
             self.Iptr,
         )
-        return self.I
+        
+        # torch.cuda.synchronize()
+        # self.res.syncDefaultStreamCurrentDevice()
+        
+        if self.dense:
+            return self._compute_dense(self.I[:bs], self.D[:bs])
+        else:
+            return self.I[:bs]
 
 
 class InfBiasedEmbeddingSum(nn.Module):
@@ -167,6 +189,8 @@ class InfBiasedLinear(nn.Linear):
 class InferenceEncoder(BaseNet):
     def __init__(self, n_toks, emb_dim, out_dim=None):
         super().__init__()
+        
+        self.n_toks = n_toks
         
         if out_dim is None:
             out_dim = n_toks
@@ -197,4 +221,3 @@ class InferenceEncoder(BaseNet):
         x = self.layers(x)
         x = self.linear(x) if self.exact else self.approx_linear(x)
         return x
-
