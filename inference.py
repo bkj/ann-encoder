@@ -31,9 +31,6 @@ from helpers import fast_topk, precision_at_ks
 def benchmark_predict(model, dataloaders, mode='val'):
     _ = model.eval()
     
-    _ = model(dataloaders[mode][0][0].cuda())
-    torch.cuda.synchronize()
-    
     gen = dataloaders[mode]
     if model.verbose:
         gen = tqdm(gen)
@@ -47,6 +44,20 @@ def benchmark_predict(model, dataloaders, mode='val'):
     torch.cuda.synchronize()
     
     return time() - t
+
+def warmup(model, batch):
+    batch = batch.cuda()
+    
+    model.exact = False
+    approx_test = model(batch)
+    approx_test = to_numpy(approx_test)
+    
+    model.exact = True
+    exact_test  = model(dataloaders['valid'][0][0].cuda())
+    exact_test  = exact_test.topk(k=args.topk, dim=-1)[1]
+    exact_test  = to_numpy(exact_test)
+    
+    return (approx_test[:,0] == exact_test[:,0]).mean()
 
 
 # --

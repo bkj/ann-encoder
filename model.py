@@ -167,7 +167,6 @@ class InfBiasedEmbeddingSum(nn.Module):
 
 class InfBiasedLinear(nn.Linear):
     def __init__(self, in_channels, out_channels):
-        print('bias=True -> exact/approx comparisons are unfair')
         super().__init__(in_channels, out_channels, bias=True)
 
 
@@ -179,17 +178,17 @@ class InferenceEncoder(BaseNet):
             out_dim = n_toks
         
         self.emb = InfBiasedEmbeddingSum(n_toks, emb_dim)
-        # self.layers = nn.Sequential(*[
-        #     nn.ReLU(),
-        #     nn.BatchNorm1d(emb_dim),
-        #     nn.Dropout(0.0),
+        self.layers = nn.Sequential(*[
+            nn.ReLU(),
+            nn.BatchNorm1d(emb_dim),
+            nn.Dropout(0.0),
             
-        #     InfBiasedLinear(emb_dim, emb_dim),
+            InfBiasedLinear(emb_dim, emb_dim),
             
-        #     nn.ReLU(),
-        #     nn.BatchNorm1d(emb_dim),
-        #     nn.Dropout(0.0),
-        # ])
+            nn.ReLU(),
+            nn.BatchNorm1d(emb_dim),
+            nn.Dropout(0.0),
+        ])
         
         self.linear = InfBiasedLinear(emb_dim, out_dim)
         
@@ -201,7 +200,7 @@ class InferenceEncoder(BaseNet):
     
     def forward(self, x):
         x = self.emb(x)
-        # x = self.layers(x)
+        x = self.layers(x)
         x = self.linear(x) if self.exact else self.approx_linear(x)
         return x
 

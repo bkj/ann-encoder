@@ -5,11 +5,6 @@
     
     Comparison of FAISS lookup and pytorch GPU matmul
     for large softmax output layer
-    
-    !! Uses the `ann` branch of basenet, where `model.predict` doesn't actually return anything from the GPU
-    
-    !! Need some way to quantify accuracy
-    !! Could also use `IVFx,PQy` index
 """
 
 import os
@@ -18,6 +13,7 @@ import json
 import argparse
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from time import time
 from collections import OrderedDict
 
@@ -34,12 +30,20 @@ from model import InferenceEncoder
 
 def benchmark_predict(model, dataloaders, mode='val'):
     _ = model.eval()
-    for data, _ in dataloaders[mode]:
+    
+    gen = dataloaders[mode]
+    if model.verbose:
+        gen = tqdm(gen)
+    
+    t = time()
+    for data, _ in gen:
         with torch.no_grad():
             data = data.cuda(async=True)
             out  = model(data)
     
     torch.cuda.synchronize()
+    
+    return time() - t
 
 def warmup(model, batch):
     batch = batch.cuda()
@@ -122,16 +126,12 @@ if __name__ == "__main__":
     # Run
     
     # Approximate
-    t = time()
     model.exact = False
-    benchmark_predict(model, dataloaders, mode='valid')
-    approx_time = time() - t
+    approx_time = benchmark_predict(model, dataloaders, mode='valid')
     
     # Exact
-    t = time()
     model.exact = True
-    benchmark_predict(model, dataloaders, mode='valid')
-    exact_time = time() - t
+    exact_time = benchmark_predict(model, dataloaders, mode='valid')
     
     print({
         "exact_time"     : exact_time,
