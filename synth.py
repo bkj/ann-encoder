@@ -20,20 +20,16 @@ import numpy as np
 import pandas as pd
 from time import time
 from collections import OrderedDict
-from joblib import Parallel, delayed
 
-import faiss
+import faiss # !! segfault otherwise?
 import torch
 from torch import nn
-from torch.nn import functional as F
-from torch.autograd import Variable
 
-from basenet import BaseNet
 from basenet.helpers import set_seeds
 
-from torch.utils.data import Dataset, DataLoader
+from model import InferenceEncoder
 
-def benchmark_predict(model, dataloaders, mode='val', no_cat=False, dummy=False):
+def benchmark_predict(model, dataloaders, mode='val'):
     _ = model.eval()
     for data, _ in dataloaders[mode]:
         with torch.no_grad():
@@ -41,69 +37,6 @@ def benchmark_predict(model, dataloaders, mode='val', no_cat=False, dummy=False)
             out  = model(data)
     
     torch.cuda.synchronize()
-
-
-class ApproxLinear(nn.Module):
-    def __init__(self, linear, batch_size, topk, nprobe, npartitions):
-        super().__init__()
-        
-        self.weights = linear.weight.detach().cpu().numpy()
-        
-        self.cpu_index = faiss.index_factory(
-            self.weights.shape[1],
-            f"IVF{npartitions},Flat",
-            # "Flat",
-            
-            faiss.METRIC_INNER_PRODUCT # This appears to be slower -- why? And can we get away w/ L2 at inference time?
-        )
-        self.cpu_index.train(self.weights)
-        self.cpu_index.add(self.weights)
-        self.cpu_index.nprobe = nprobe
-        
-        self.res   = faiss.StandardGpuResources()
-        self.index = faiss.index_cpu_to_gpu(self.res, 0, self.cpu_index)
-        
-        self.topk = topk
-        self.I    = torch.LongTensor(batch_size, topk).cuda()
-        self.D    = torch.FloatTensor(batch_size, topk).cuda()
-        self.Dptr = faiss.cast_integer_to_float_ptr(self.D.storage().data_ptr())
-        self.Iptr = faiss.cast_integer_to_long_ptr(self.I.storage().data_ptr())
-        
-    def forward(self, x):
-        xptr = faiss.cast_integer_to_float_ptr(x.storage().data_ptr())
-        self.index.search_c(
-            x.shape[0],
-            xptr,
-            self.topk,
-            self.Dptr,
-            self.Iptr,
-        )
-        return self.I
-
-
-class Model(BaseNet):
-    def __init__(self, n_toks, emb_dim, out_dim, batch_size, topk, nprobe, npartitions):
-        super().__init__()
-        
-        self.emb           = nn.EmbeddingBag(n_toks, emb_dim)
-        self.linear        = nn.Linear(emb_dim, out_dim, bias=False)
-        self.approx_linear = ApproxLinear(self.linear, batch_size, topk, nprobe, npartitions)
-        
-        self.topk = topk
-        self.exact = None
-    
-    def forward(self, x):
-        assert self.exact is not None
-        
-        x = self.emb(x)
-        
-        if self.exact:
-            x = self.linear(x)
-            # x = x.topk(k=self.topk, dim=-1)[1] # Expensive!
-        else:
-            x = self.approx_linear(x)
-        
-        return x
 
 
 def parse_args():
@@ -148,23 +81,23 @@ if __name__ == "__main__":
     }
     
     # --
-    # Model
+    # Define model
     
     print('define model', file=sys.stderr)
-    model = Model(
+    model = InferenceEncoder(
         n_toks=args.n_toks,
         emb_dim=args.emb_dim,
         out_dim=args.out_dim,
-        batch_size=args.batch_size,
-        topk=args.topk,
-        nprobe=args.nprobe,
-        npartitions=args.npartitions,
-    ).to(torch.device('cuda'))
+    )
+    model = model.to(torch.device('cuda'))
     model.verbose = args.verbose
+    print(model, file=sys.stderr)
+    
+    model.init_ann(args.topk, args.batch_size, args.nprobe, args.npartitions)
     
     # Warmup
-    model.exact = True;  _ = model(dataloaders['valid'][0][0].cuda())
     model.exact = False; _ = model(dataloaders['valid'][0][0].cuda())
+    model.exact = True;  _ = model(dataloaders['valid'][0][0].cuda())
     
     # --
     # Run
@@ -172,13 +105,13 @@ if __name__ == "__main__":
     # Approximate
     t = time()
     model.exact = False
-    benchmark_predict(model, dataloaders, mode='valid', dummy=True)
+    benchmark_predict(model, dataloaders, mode='valid')
     approx_time = time() - t
     
     # Exact
     t = time()
     model.exact = True
-    benchmark_predict(model, dataloaders, mode='valid', dummy=True)
+    benchmark_predict(model, dataloaders, mode='valid')
     exact_time = time() - t
     
     print({
