@@ -25,9 +25,12 @@ import faiss # !! segfault otherwise?
 import torch
 from torch import nn
 
-from basenet.helpers import set_seeds
+from basenet.helpers import to_numpy, set_seeds
 
 from model import InferenceEncoder
+
+# --
+# Helpers
 
 def benchmark_predict(model, dataloaders, mode='val'):
     _ = model.eval()
@@ -38,6 +41,22 @@ def benchmark_predict(model, dataloaders, mode='val'):
     
     torch.cuda.synchronize()
 
+def warmup(model, batch):
+    batch = batch.cuda()
+    
+    model.exact = False
+    approx_test = model(batch)
+    approx_test = to_numpy(approx_test)
+    
+    model.exact = True
+    exact_test  = model(dataloaders['valid'][0][0].cuda())
+    exact_test  = exact_test.topk(k=args.topk, dim=-1)[1]
+    exact_test  = to_numpy(exact_test)
+    
+    return (approx_test[:,0] == exact_test[:,0]).mean()
+
+# --
+# CLI
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -89,15 +108,15 @@ if __name__ == "__main__":
         emb_dim=args.emb_dim,
         out_dim=args.out_dim,
     )
+    
     model = model.to(torch.device('cuda'))
     model.verbose = args.verbose
     print(model, file=sys.stderr)
     
     model.init_ann(args.topk, args.batch_size, args.nprobe, args.npartitions)
     
-    # Warmup
-    model.exact = False; _ = model(dataloaders['valid'][0][0].cuda())
-    model.exact = True;  _ = model(dataloaders['valid'][0][0].cuda())
+    pct_agree = warmup(model, dataloaders['valid'][0][0])
+    print('warmup: pct_agree=%f' % pct_agree, file=sys.stderr)
     
     # --
     # Run

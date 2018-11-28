@@ -4,6 +4,9 @@
     model.py
 """
 
+import sys
+import numpy as np
+
 import faiss
 import torch
 from torch import nn
@@ -97,14 +100,19 @@ class ApproxLinear(nn.Module):
     def __init__(self, linear, batch_size, topk, nprobe, npartitions):
         super().__init__()
         
-        self.weights = linear.weight.detach().cpu().numpy()
+        linear_weight = linear.weight.detach().cpu().numpy()
+        
+        self.has_bias = linear.bias is not None
+        print('ApproxLinear: has_bias=%d' % self.has_bias, file=sys.stderr)
+        if self.has_bias:
+            linear_bias = linear.bias.detach().cpu().numpy()
+            self.weights = np.column_stack([linear_weight, linear_bias])
+        else:
+            self.weights = linear_weight
         
         self.cpu_index = faiss.index_factory(
             self.weights.shape[1],
-            # >>
-            # f"IVF{npartitions},Flat",
-            "Flat",
-            # <<
+            f"IVF{npartitions},Flat",
             faiss.METRIC_INNER_PRODUCT # This appears to be slower -- why? And can we get away w/ L2 at inference time?
         )
         self.cpu_index.train(self.weights)
@@ -114,13 +122,23 @@ class ApproxLinear(nn.Module):
         self.res   = faiss.StandardGpuResources()
         self.index = faiss.index_cpu_to_gpu(self.res, 0, self.cpu_index)
         
-        self.topk = topk
+        self.topk       = topk
+        self.batch_size = batch_size
+        self.ones       = torch.ones(batch_size).view(-1, 1).cuda()
+        
         self.I    = torch.LongTensor(batch_size, topk).cuda()
         self.D    = torch.FloatTensor(batch_size, topk).cuda()
         self.Dptr = faiss.cast_integer_to_float_ptr(self.D.storage().data_ptr())
         self.Iptr = faiss.cast_integer_to_long_ptr(self.I.storage().data_ptr())
         
     def forward(self, x):
+        bs = x.shape[0]
+        if self.has_bias:
+            if bs == self.batch_size:
+                x = torch.cat([x, self.ones], dim=-1)
+            else:
+                x = torch.cat([x, self.ones[:bs]], dim=-1)
+        
         xptr = faiss.cast_integer_to_float_ptr(x.storage().data_ptr())
         self.index.search_c(
             x.shape[0],
@@ -149,6 +167,7 @@ class InfBiasedEmbeddingSum(nn.Module):
 
 class InfBiasedLinear(nn.Linear):
     def __init__(self, in_channels, out_channels):
+        print('bias=True -> exact/approx comparisons are unfair')
         super().__init__(in_channels, out_channels, bias=True)
 
 
@@ -160,17 +179,17 @@ class InferenceEncoder(BaseNet):
             out_dim = n_toks
         
         self.emb = InfBiasedEmbeddingSum(n_toks, emb_dim)
-        self.layers = nn.Sequential(*[
-            nn.ReLU(),
-            nn.BatchNorm1d(emb_dim),
-            nn.Dropout(0.0),
+        # self.layers = nn.Sequential(*[
+        #     nn.ReLU(),
+        #     nn.BatchNorm1d(emb_dim),
+        #     nn.Dropout(0.0),
             
-            InfBiasedLinear(emb_dim, emb_dim),
+        #     InfBiasedLinear(emb_dim, emb_dim),
             
-            nn.ReLU(),
-            nn.BatchNorm1d(emb_dim),
-            nn.Dropout(0.0),
-        ])
+        #     nn.ReLU(),
+        #     nn.BatchNorm1d(emb_dim),
+        #     nn.Dropout(0.0),
+        # ])
         
         self.linear = InfBiasedLinear(emb_dim, out_dim)
         
