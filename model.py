@@ -55,7 +55,7 @@ class BiasedEmbeddingSum(nn.Module):
         self.emb      = nn.Embedding(n_toks, emb_dim, padding_idx=0)
         self.emb_bias = nn.Parameter(torch.zeros(emb_dim))
         
-        torch.nn.init.normal_(self.emb.weight.data, 0, 0.01) # !! Slows down approx. _a lot_ (at high dimensions?)
+        torch.nn.init.normal_(self.emb.weight.data, 0, 0.01)
         self.emb.weight.data[0] = 0
         
     def forward(self, x):

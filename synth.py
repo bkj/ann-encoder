@@ -93,6 +93,7 @@ if __name__ == "__main__":
     print('define dataloaders', file=sys.stderr)
     X = np.random.choice(args.n_toks, (args.n_batches * args.batch_size, args.seq_len))
     X = torch.LongTensor(X)
+    
     y = torch.zeros(X.shape[0])
     dataloaders = {
         "valid" : list(torch.utils.data.DataLoader(
