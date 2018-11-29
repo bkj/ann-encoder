@@ -13,6 +13,21 @@ python synth.py
 # ML20 experiments
 
 python train.py --cache-path cache/ml20 --emb-dim 800 --batch-size 256
+# {"epoch": 0, "p_at_01": 0.5115926436715214, "p_at_05": 0.40765670467099424, "p_at_10": 0.34342457741546506, "elapsed": 49.94225716590881}
+
+# >>
+# Frozen last layer:
+# {"epoch": 0, "p_at_01": 0.05284743633252222, "p_at_05": 0.03374755402800141, "p_at_10": 0.02698836764312998, "elapsed": 47.941659927368164}
+
+# Freeze layer after first epoch:
+
+
+
+# <<
+
+
+
+
 python inference.py --cache-path cache/ml20 --emb-dim 800 --batch-size 512
 python inference.py --cache-path cache/ml20 --emb-dim 800 --benchmark
 

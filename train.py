@@ -21,6 +21,8 @@ from model import ExactEncoder
 from model import RaggedAutoencoderDataset, ragged_collate_fn
 from helpers import fast_topk, precision_at_ks
 
+from basenet.helpers import set_freeze
+
 # --
 # Run
 
@@ -29,7 +31,7 @@ def parse_args():
     
     parser.add_argument('--train-path', type=str)
     parser.add_argument('--test-path', type=str)
-    parser.add_argument('--cache-path', type=str, required=True)
+    parser.add_argument('--cache-path', type=str, default='./cache/ml20')
     
     parser.add_argument('--batch-size', type=int, default=256)
     parser.add_argument('--emb-dim', type=int, default=800)
@@ -79,22 +81,22 @@ if __name__ == "__main__":
     
     print('define dataloaders', file=sys.stderr)
     dataloaders = {
-        "train" : DataLoader(
+        "train" : list(DataLoader(
             dataset=RaggedAutoencoderDataset(X=X_train, n_toks=n_toks),
             batch_size=args.batch_size,
             collate_fn=ragged_collate_fn,
             num_workers=4,
             pin_memory=True,
             shuffle=True,
-        ),
-        "valid" : DataLoader(
+        )),
+        "valid" : list(DataLoader(
             dataset=RaggedAutoencoderDataset(X=X_train, n_toks=n_toks),
             batch_size=args.batch_size,
             collate_fn=ragged_collate_fn,
             num_workers=4,
             pin_memory=False,
             shuffle=False,
-        )
+        ))
     }
     
     # --
@@ -112,13 +114,104 @@ if __name__ == "__main__":
     model.verbose = not args.no_verbose
     print(model, file=sys.stderr)
     
-    model.init_optimizer(opt=torch.optim.Adam, params=model.parameters(), lr=args.lr)
+    params = [p for p in model.parameters() if p.requires_grad]
+    model.init_optimizer(opt=torch.optim.Adam, params=params, lr=args.lr)
+    
+    # >>
+    
+    # --
+    # 0) Normal training
+    
+    # {"epoch": 0, "p_at_01": 0.5115926436715214, "p_at_05": 0.40765670467099424, "p_at_10": 0.34342457741546506, "elapsed": 49.7515709400177}
+    # {"epoch": 1, "p_at_01": 0.5302000823146297, "p_at_05": 0.42323149906493474, "p_at_10": 0.35684547233434183, "elapsed": 102.56505918502808}
+    
+    # --
+    # 1) Freeze from beginning
+    
+    # set_freeze(model.linear, True)
+    
+    # {"epoch": 0, "p_at_01": 0.05284743633252222, "p_at_05": 0.03374755402800141, "p_at_10": 0.02698836764312998, "elapsed": 47.941659927368164}
+    # This is terrible
+    
+    # --
+    # 2) Freeze after a short burn-in period
+    
+    # train_hist = model.train_epoch(dataloaders, mode='train', compute_acc=False, num_batches=100)
+    # preds, _   = model.predict(dataloaders, mode='valid', no_cat=True)
+    # top_k      = fast_topk(preds, X_train)
+    # precisions = precision_at_ks(X_test, top_k)
+    # print(json.dumps({
+    #     "epoch":   -1,
+    #     "p_at_01": precisions[1],
+    #     "p_at_05": precisions[5],
+    #     "p_at_10": precisions[10],
+    #     "elapsed": -1
+    # }))
+    # set_freeze(model.linear, True)
+    
+    # {"epoch": -1, "p_at_01": 0.44140137046637734, "p_at_05": 0.34543695349223424, "p_at_10": 0.29227469980432225, "elapsed": -1}
+    # {"epoch": 0, "p_at_01": 0.44603698381867674, "p_at_05": 0.3548930270844014, "p_at_10": 0.29877899966063265, "elapsed": 49.190366983413696}
+    # All of the learning happens in the burnin, before the last layer is fixed
+    
+    # --
+    # 3) Freeze after first epoch
+    
+    # ... insert `set_freeze(model.linear, True)` after `model.train_epoch` below
+    
+    # {"epoch": 0, "p_at_01": 0.5115926436715214, "p_at_05": 0.40765670467099424, "p_at_10": 0.34342457741546506, "elapsed": 49.856390953063965}
+    # {"epoch": 1, "p_at_01": 0.49429935086971905, "p_at_05": 0.39147538142722016, "p_at_10": 0.3307806170708989, "elapsed": 101.513028383255}
+    # Terrible - Accuracy actually goes down!
+    
+    # --
+    # 4) Freeze rest of model after short burn-in period
+    
+    # train_hist = model.train_epoch(dataloaders, mode='train', compute_acc=False, num_batches=100)
+    # preds, _   = model.predict(dataloaders, mode='valid', no_cat=True)
+    # top_k      = fast_topk(preds, X_train)
+    # precisions = precision_at_ks(X_test, top_k)
+    # print(json.dumps({
+    #     "epoch":   -1,
+    #     "p_at_01": precisions[1],
+    #     "p_at_05": precisions[5],
+    #     "p_at_10": precisions[10],
+    #     "elapsed": -1
+    # }))
+    # set_freeze(model.emb, True)
+    # set_freeze(model.layers, True)
+    
+    # {"epoch": -1, "p_at_01": 0.44140137046637734, "p_at_05": 0.34543695349223424, "p_at_10": 0.29227469980432225, "elapsed": -1}
+    # {"epoch": 0, "p_at_01": 0.425046753265508, "p_at_05": 0.34323900846974215, "p_at_10": 0.2927093788133696, "elapsed": 46.91078042984009}
+    # Accuracy goes down here as well.
+    
+    # --
+    # 5) Freeze everythin but last layer after first epoch
+    
+    # ... insert
+    # ```
+    #     set_freeze(model.emb, True)
+    #     set_freeze(model.layers, True)
+    # ```
+    # after `model.train_epoch` below
+    
+    # {"epoch": 0, "p_at_01": 0.5115926436715214, "p_at_05": 0.40765670467099424, "p_at_10": 0.34342457741546506, "elapsed": 48.89760661125183} 
+    # {"epoch": 1, "p_at_01": 0.49590954055439623, "p_at_05": 0.3955405688374142, "p_at_10": 0.33511007776566326, "elapsed": 95.30001187324524}
+    # Accuracy goes down here as well.
+    
+    # --
+    # Summary
+    
+    # These results suggest that the last layer is critical for learning, and we can't just freeze it
+    # Next questions:
+    #   What if we precompute the softmax normalization?
+    
+    # <<
     
     # --
     # Run
     
     t = time()
     for epoch in range(args.epochs):
+        
         train_hist = model.train_epoch(dataloaders, mode='train', compute_acc=False)
         
         if epoch % args.eval_interval == 0:
@@ -139,5 +232,6 @@ if __name__ == "__main__":
                 "p_at_10": precisions[10],
                 "elapsed": time() - t,
             }))
+            
     
     model.save('%s.pt' % args.cache_path)

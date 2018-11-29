@@ -11,3 +11,4 @@
 - Can we avoid doing some of the synchronizes? 
 - IP search may be slower than L2? Is that true?
 - [BUG] Changing the batch size in `inference.py` changes the precision slightly. 
+- [TODO] Remove dependency on custom basenet
