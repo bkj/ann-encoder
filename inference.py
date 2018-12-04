@@ -13,7 +13,7 @@ from time import time
 from tqdm import tqdm
 from joblib import Parallel, delayed
 
-import faiss # !! segfault otherwise?
+import faiss # !! segfault if we import in a different order?
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -23,7 +23,7 @@ from basenet.helpers import to_numpy, set_seeds
 
 from model import ExactEncoder, InferenceEncoder
 from model import RaggedAutoencoderDataset, ragged_collate_fn
-from helpers import fast_topk, precision_at_ks, benchmark_predict
+from helpers import fast_topk, precision_at_ks, benchmark_predict, predict
 
 # --
 # Helpers
@@ -140,7 +140,7 @@ if __name__ == "__main__":
         # Exact accuracy
         model.exact = True
         
-        preds, _         = model.predict(dataloaders, mode='valid', no_cat=True)
+        preds, _         = predict(model, dataloaders, mode='valid')
         # >>
         # top_k            = fast_topk(preds, X_train)
         # exact_precisions = precision_at_ks(X_test, top_k)
@@ -153,7 +153,7 @@ if __name__ == "__main__":
         model.exact = False
         model.approx_linear.dense = True
         
-        preds, _          = model.predict(dataloaders, mode='valid', no_cat=True)
+        preds, _          = predict(model, dataloaders, mode='valid')
         # >>
         # top_k            = fast_topk(preds, X_train)
         # exact_precisions = precision_at_ks(X_test, top_k)

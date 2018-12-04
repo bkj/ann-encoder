@@ -124,7 +124,7 @@ if __name__ == "__main__":
         if epoch % args.eval_interval == 0:
             
             # Predict
-            preds, _ = predict(model, dataloaders, mode='valid', no_cat=True)
+            preds, _ = predict(model, dataloaders, mode='valid')
             
             # Rank
             top_k = fast_topk(preds, X_train)

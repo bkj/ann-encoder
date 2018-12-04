@@ -34,7 +34,7 @@ def benchmark_predict(model, dataloaders, mode='val'):
     return time() - t
 
 
-def predict(model, dataloaders, mode='val', no_cat=False, dummy=False):
+def predict(model, dataloaders, mode='val'):
     _ = model.eval()
     
     loader = dataloaders[mode]
