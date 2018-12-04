@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 """
-    prep.py
+    utils/prep_ml.py
+    
+    Data available at: http://files.grouplens.org/datasets/movielens/ml-20m.zip
 """
 
 from __future__ import print_function, division
