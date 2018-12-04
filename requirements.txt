@@ -1,0 +1,5 @@
+tqdm==4.28.1
+numpy==1.14.3
+pandas==0.23.0
+joblib==0.13.0
+git+https://github.com/bkj/basenet.git@819db22359e77ae6b4d0424d1379b84999fa20ac
