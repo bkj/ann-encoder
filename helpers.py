@@ -7,9 +7,50 @@
 import torch
 import random
 import numpy as np
+from time import time
+from tqdm import tqdm
 from joblib import Parallel, delayed
 
-from basenet.helpers import to_numpy
+from basenet.helpers import to_numpy, to_device
+
+# --
+# NN helpers
+
+def benchmark_predict(model, dataloaders, mode='val'):
+    _ = model.eval()
+    
+    gen = dataloaders[mode]
+    if model.verbose:
+        gen = tqdm(gen)
+    
+    t = time()
+    for data, _ in gen:
+        with torch.no_grad():
+            data = data.cuda(async=True)
+            out  = model(data)
+    
+    torch.cuda.synchronize()
+    
+    return time() - t
+
+
+def predict(model, dataloaders, mode='val', no_cat=False, dummy=False):
+    _ = model.eval()
+    
+    loader = dataloaders[mode]
+    gen = enumerate(loader)
+    if model.verbose:
+        gen = tqdm(gen, total=len(loader), desc='predict:%s' % mode)
+    
+    all_output, all_target = [], []
+    for _, (data, target) in gen:
+        with torch.no_grad():
+            output = model(to_device(data, model.device)).cpu()
+        
+        all_output.append(output)
+        all_target.append(target)
+    
+    return all_output, all_target
 
 # --
 # Accuracy helpers

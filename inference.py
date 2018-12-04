@@ -23,27 +23,10 @@ from basenet.helpers import to_numpy, set_seeds
 
 from model import ExactEncoder, InferenceEncoder
 from model import RaggedAutoencoderDataset, ragged_collate_fn
-from helpers import fast_topk, precision_at_ks
+from helpers import fast_topk, precision_at_ks, benchmark_predict
 
 # --
 # Helpers
-
-def benchmark_predict(model, dataloaders, mode='val'):
-    _ = model.eval()
-    
-    gen = dataloaders[mode]
-    if model.verbose:
-        gen = tqdm(gen)
-    
-    t = time()
-    for data, _ in gen:
-        with torch.no_grad():
-            data = data.cuda(async=True)
-            out  = model(data)
-    
-    torch.cuda.synchronize()
-    
-    return time() - t
 
 def warmup(model, batch):
     batch = batch.cuda()
@@ -58,7 +41,6 @@ def warmup(model, batch):
     exact_test  = to_numpy(exact_test)
     
     return (approx_test[:,0] == exact_test[:,0]).mean()
-
 
 # --
 # Run

@@ -24,26 +24,10 @@ from torch import nn
 from basenet.helpers import to_numpy, set_seeds
 
 from model import InferenceEncoder
+from helpers import benchmark_predict
 
 # --
 # Helpers
-
-def benchmark_predict(model, dataloaders, mode='val'):
-    _ = model.eval()
-    
-    gen = dataloaders[mode]
-    if model.verbose:
-        gen = tqdm(gen)
-    
-    t = time()
-    for data, _ in gen:
-        with torch.no_grad():
-            data = data.cuda(async=True)
-            out  = model(data)
-    
-    torch.cuda.synchronize()
-    
-    return time() - t
 
 def warmup(model, batch, topk):
     batch = batch.cuda()

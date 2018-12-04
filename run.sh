@@ -7,8 +7,6 @@
 
 python synth.py
 
-python synth.py
-
 # --
 # ML20 experiments
 

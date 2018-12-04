@@ -19,7 +19,7 @@ from basenet.helpers import to_numpy, set_seeds
 
 from model import ExactEncoder
 from model import RaggedAutoencoderDataset, ragged_collate_fn
-from helpers import fast_topk, precision_at_ks
+from helpers import fast_topk, precision_at_ks, predict
 
 # --
 # Run
@@ -124,7 +124,7 @@ if __name__ == "__main__":
         if epoch % args.eval_interval == 0:
             
             # Predict
-            preds, _ = model.predict(dataloaders, mode='valid', no_cat=True)
+            preds, _ = predict(model, dataloaders, mode='valid', no_cat=True)
             
             # Rank
             top_k = fast_topk(preds, X_train)
