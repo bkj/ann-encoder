@@ -70,6 +70,7 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     set_seeds(args.seed)
+    _ = torch.zeros(1).cuda()
     
     # --
     # Generate some data
@@ -79,6 +80,7 @@ if __name__ == "__main__":
     X = torch.LongTensor(X)
     
     y = torch.zeros(X.shape[0])
+    t = time()
     dataloaders = {
         "valid" : list(torch.utils.data.DataLoader(
             dataset=torch.utils.data.TensorDataset(X, y),
@@ -87,6 +89,7 @@ if __name__ == "__main__":
             shuffle=False,
         ))
     }
+    print(time() - t)
     
     # --
     # Define model
