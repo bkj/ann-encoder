@@ -71,7 +71,7 @@ def precision_at_ks(act, pred, ks=[1, 5, 10]):
 def __filter_and_rank(pred, X_filter, k=10):
     pred_min = pred.min()
     for i in range(pred.shape[0]):
-        pred[i][X_filter[i]] = pred_min
+        pred[i][list(X_filter[i])] = pred_min
     
     return np.argsort(-pred, axis=-1)[:,:k]
 

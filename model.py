@@ -85,6 +85,12 @@ class ExactEncoder(BaseNet):
             nn.ReLU(),
             nn.BatchNorm1d(emb_dim),
             nn.Dropout(dropout),
+            
+            BiasedLinear(emb_dim, emb_dim, bias_offset=0),
+            
+            nn.ReLU(),
+            nn.BatchNorm1d(emb_dim),
+            nn.Dropout(dropout),
         ])
         
         self.linear = BiasedLinear(emb_dim, n_toks, bias_offset=bias_offset)
